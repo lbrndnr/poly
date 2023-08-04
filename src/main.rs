@@ -6,7 +6,6 @@ use walkdir::{WalkDir, DirEntry};
 
 mod strings;
 mod source;
-use crate::source::Source;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -85,7 +84,8 @@ async fn main() {
     // println!("{:?}", res);
 
     let app = source::LocalDirSource { root: String::from("/Applications/Twitter.app/Contents/Resources") };
-    let locales = app.available_locales();
-    println!("{:?}", locales);
+    let locales: Vec<String> = app.available_locales().unwrap().collect();
+    let word = app.translate("Following", "de");
+    println!("{:?}", word);
 }
 

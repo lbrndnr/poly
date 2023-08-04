@@ -1,16 +1,17 @@
 use anyhow::Error;
 use std::fs;
 use std::path::Path;
+use std::collections::HashMap;
 
 pub struct Localization {
     pub locale: String,
-    pub translations: Vec<Translation>
+    pub translations: HashMap<String, Translation>
 }
 
 pub struct Translation {
-    comment: String,
-    source: String,
-    target: String
+    pub comment: String,
+    pub source: String,
+    pub target: String
 }
 
 #[derive(PartialEq)]
@@ -33,7 +34,7 @@ fn target_locale_of_file(path: &str) -> Result<&str, Error> {
 
 pub fn parse<P: AsRef<Path>>(path: P) -> Result<Localization, Error> {
     let content = fs::read_to_string(path.as_ref())?;
-    let mut translations: Vec<Translation> = Vec::new();
+    let mut translations = HashMap::new();
     let mut comment = String::new();
     // let mut source = String::new();
     // let mut target = String::new();
@@ -57,7 +58,7 @@ pub fn parse<P: AsRef<Path>>(path: P) -> Result<Localization, Error> {
             if text.len() == 2 {
                 let source = String::from(text[0]);
                 let target = String::from(text[1]);
-                translations.push(Translation { comment: comment.clone(), source, target })
+                translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
             }
         }
     }

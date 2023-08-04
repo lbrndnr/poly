@@ -1,12 +1,7 @@
 use std::fs;
-use anyhow::{Result};
-
-pub trait Source {
-
-    fn available_locales(&self) -> Result<Vec<&str>>;
-    fn translate(&self, word: &str, target_locale: &str) -> Result<&str>;
-
-}
+use std::path::Path;
+use anyhow::Result;
+use crate::strings::*;
 
 pub struct LocalDirSource {
 
@@ -14,18 +9,41 @@ pub struct LocalDirSource {
 
 }
 
-impl Source for LocalDirSource {
+impl LocalDirSource {
 
-    fn available_locales(&self) -> Result<Vec<&str>> {
-        fs::read_dir(&self.root)
+    pub fn available_locales(&self) -> Result<impl Iterator<Item = String>> {
+        let res = fs::read_dir(&self.root)
             .unwrap()
-            .filter(|p| p.unwrap().file_name().to_str().unwrap().contains(".lproj"));
+            .filter_map(|p| {
+                let file_name = p.unwrap().file_name();
+                let string = file_name.into_string().unwrap();
+                let res = string.strip_suffix(".lproj");
+                
+                res.map(|s| s.to_owned())
+            });
 
-        Ok(vec!["en"])
+        Ok(res)
     }
 
-    fn translate(&self, word: &str, target_locale: &str) -> Result<&str> {
-        Ok("haha")
+    pub fn translate(&self, word: &str, target_locale: &str) -> Result<Option<String>> {
+        let locale_dir = format!("{}.lproj", target_locale);
+        let path = Path::new(&self.root).join(locale_dir);
+
+        let path = fs::read_dir(path)
+            .unwrap()
+            .map(|p| p.unwrap().file_name().into_string().unwrap())
+            .find(|p| {
+                if p.ends_with(".strings") { 
+                    let loc = parse(p);
+                    loc.map_or(false, |l| l.translations.contains_key(word)) 
+                }
+                else { false }
+            });
+
+        match path {
+            Some(path) => Ok(parse(path)?.translations.get(word).map(|t| t.target.clone())),
+            None => Ok(None)
+        }
     }
 
 }
