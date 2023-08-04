@@ -1,2 +1,1 @@
-# poly
-🌈 poly
+poly[glot] - a localization experiment
