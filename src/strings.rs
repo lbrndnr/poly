@@ -1,5 +1,8 @@
 use anyhow::Error;
-use std::fs;
+use std::ffi::OsString;
+use std::fs::File;
+use std::io::Read;
+use std::os::unix::prelude::OsStringExt;
 use std::path::Path;
 use std::collections::HashMap;
 
@@ -32,8 +35,19 @@ fn target_locale_of_file(path: &str) -> Result<&str, Error> {
     Ok(comps[0].strip_suffix(".lproj").unwrap())
 }
 
-pub fn parse<P: AsRef<Path>>(path: P) -> Result<Localization, Error> {
-    let content = fs::read_to_string(path.as_ref())?;
+pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Error> {
+    let file = File::open(&path)?;
+    let mut reader = encoding_rs_io::DecodeReaderBytesBuilder::new()
+        .encoding(Some(encoding_rs::UTF_16LE))
+        .build(file);
+
+    // let mut content = Vec::new();
+    // reader.read_to_end(&mut content);
+
+    // let content = OsString::from_vec(content);
+    let mut content = String::new();
+    reader.read_to_string(&mut content)?;
+
     let mut translations = HashMap::new();
     let mut comment = String::new();
     // let mut source = String::new();
@@ -49,21 +63,26 @@ pub fn parse<P: AsRef<Path>>(path: P) -> Result<Localization, Error> {
             continue;
         }
 
-        if !comment.is_empty() {
-            let text: Vec<&str> = line
-            .split("\"")
-            .filter(|s| ! (s.is_empty() || *s == ";" || (*s).contains("=")))
-            .collect();
-        
-            if text.len() == 2 {
-                let source = String::from(text[0]);
-                let target = String::from(text[1]);
+        let text: Vec<&str> = line
+        .split("\"")
+        .filter(|s| ! (s.is_empty() || *s == ";" || (*s).contains("=")))
+        .collect();
+    
+        if text.len() == 2 {
+            let source = String::from(text[0]);
+            let target = String::from(text[1]);
+
+            println!("{} - {}", source, target);
+
+            if inversed {
+                translations.insert(target.clone(), Translation { comment: comment.clone(), target, source });
+            }
+            else {
                 translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
             }
         }
     }
 
     let locale = target_locale_of_file(path.as_ref().to_str().unwrap())?;
-    
     Ok(Localization { locale: locale.to_owned(), translations })
 }

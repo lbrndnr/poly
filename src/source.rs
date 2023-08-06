@@ -26,22 +26,35 @@ impl LocalDirSource {
     }
 
     pub fn translate(&self, word: &str, target_locale: &str) -> Result<Option<String>> {
-        let locale_dir = format!("{}.lproj", target_locale);
-        let path = Path::new(&self.root).join(locale_dir);
+        let path = Path::new(&self.root).join("en.lproj");
+        let id = self.translate_in_dir(word, path, true)?;
+        println!("{:?} {:?}", self.root, id);
 
-        let path = fs::read_dir(path)
+        match id {
+            Some(id) => {
+                let locale_dir = format!("{}.lproj", target_locale);
+                let path = Path::new(&self.root).join(locale_dir);
+                self.translate_in_dir(&id, path, false)
+            }
+            None => Ok(None)
+        }
+    }
+
+    fn translate_in_dir<P: AsRef<Path>>(&self, word: &str, dir: P, inversed: bool) -> Result<Option<String>> {
+        let path = fs::read_dir(dir)
             .unwrap()
-            .map(|p| p.unwrap().file_name().into_string().unwrap())
+            .map(|p| p.unwrap().path())
             .find(|p| {
-                if p.ends_with(".strings") { 
-                    let loc = parse(p);
+                let is_strings = p.extension().map_or(false, |e| e == "strings");
+                if is_strings { 
+                    let loc = parse(p, inversed);
                     loc.map_or(false, |l| l.translations.contains_key(word)) 
                 }
                 else { false }
             });
 
         match path {
-            Some(path) => Ok(parse(path)?.translations.get(word).map(|t| t.target.clone())),
+            Some(path) => Ok(parse(path, inversed)?.translations.get(word).map(|t| t.target.clone())),
             None => Ok(None)
         }
     }
