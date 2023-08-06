@@ -1,8 +1,7 @@
 use anyhow::Error;
-use std::ffi::OsString;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
-use std::os::unix::prelude::OsStringExt;
 use std::path::Path;
 use std::collections::HashMap;
 
@@ -25,14 +24,13 @@ enum ParsingCursor {
     Target
 }
 
-fn target_locale_of_file(path: &str) -> Result<&str, Error> {
-    let comps: Vec<&str> = Path::new(path)
-    .components()
-    .map(|c| c.as_os_str().to_str().unwrap())
-    .filter(|c| c.ends_with(".lproj"))
-    .collect();
-
-    Ok(comps[0].strip_suffix(".lproj").unwrap())
+fn target_locale_of_file<S: AsRef<OsStr> + ?Sized>(path: &S) -> Option<&str> {
+    Path::new(path)
+        .components()
+        .rev()
+        .find_map(|c| {
+            c.as_os_str().to_str().and_then(|n| n.strip_suffix(".lproj"))
+        })
 }
 
 pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Error> {
@@ -83,6 +81,6 @@ pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Er
         }
     }
 
-    let locale = target_locale_of_file(path.as_ref().to_str().unwrap())?;
+    let locale = target_locale_of_file(path.as_ref()).expect("localization should be in a lproj folder");
     Ok(Localization { locale: locale.to_owned(), translations })
 }
