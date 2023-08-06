@@ -67,17 +67,14 @@ pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Er
         .collect();
     
         if text.len() == 2 {
-            let source = String::from(text[0]);
-            let target = String::from(text[1]);
+            let mut source = String::from(text[0]);
+            let mut target = String::from(text[1]);
+            if inversed {
+                (source, target) = (target, source)
+            }
 
             println!("{} - {}", source, target);
-
-            if inversed {
-                translations.insert(target.clone(), Translation { comment: comment.clone(), target, source });
-            }
-            else {
-                translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
-            }
+            translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
         }
     }
 
