@@ -28,7 +28,6 @@ impl LocalDirSource {
     pub fn translate(&self, word: &str, target_locale: &str) -> Result<Option<String>> {
         let path = Path::new(&self.root).join("en.lproj");
         let id = self.translate_in_dir(word, path, true)?;
-        println!("{:?} {:?}", self.root, id);
 
         match id {
             Some(id) => {

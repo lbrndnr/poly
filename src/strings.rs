@@ -34,17 +34,9 @@ fn target_locale_of_file<S: AsRef<OsStr> + ?Sized>(path: &S) -> Option<&str> {
 }
 
 pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Error> {
-    let file = File::open(&path)?;
-    let mut reader = encoding_rs_io::DecodeReaderBytesBuilder::new()
-        .encoding(Some(encoding_rs::UTF_16LE))
-        .build(file);
-
-    // let mut content = Vec::new();
-    // reader.read_to_end(&mut content);
-
-    // let content = OsString::from_vec(content);
+    let mut file = File::open(&path)?;
     let mut content = String::new();
-    reader.read_to_string(&mut content)?;
+    file.read_to_string(&mut content)?;
 
     let mut translations = HashMap::new();
     let mut comment = String::new();
@@ -73,7 +65,6 @@ pub fn parse<P: AsRef<Path>>(path: P, inversed: bool) -> Result<Localization, Er
                 (source, target) = (target, source)
             }
 
-            println!("{} - {}", source, target);
             translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
         }
     }

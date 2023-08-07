@@ -83,9 +83,9 @@ async fn main() {
     // let res = search(&octo, "Following").await;
     // println!("{:?}", res);
 
-    let app = source::LocalDirSource { root: String::from("/Applications/Numbers.app/Contents/Resources") };
+    let app = source::LocalDirSource { root: String::from("/Users/Laurin/Desktop/transmission/macosx") };
     let locales: Vec<String> = app.available_locales().unwrap().collect();
-    let word = app.translate("Following", "de");
+    let word = app.translate("Activity", "de");
     println!("{:?}", word);
 }
 
