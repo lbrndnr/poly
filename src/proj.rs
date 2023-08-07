@@ -24,7 +24,8 @@ impl <'a> Project<'a> {
     }
 
     pub fn localizations_for_locale(&self, locale: &str) -> impl Iterator<Item = Localization> {
-        fs::read_dir(self.root)
+        let path = self.root.join(format!("{locale}.lproj"));
+        fs::read_dir(path)
             .unwrap()
             .filter_map(|p| {
                 let path = p.unwrap().path();

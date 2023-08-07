@@ -125,20 +125,31 @@ async fn main() {
         }
     }
 
-    let res = search(&octo, "Following", &args.target).await;
-    if let Err(err) = res {
-        eprintln!("Failed to search for translations on GitHub: {err:?}");
-        return;
-    }
-    let res = res.unwrap();
-    for code in res.items {
-        let localization = download(&octo, &code).await.unwrap();
-        println!("{} {:?}", code.path, localization.translations.keys());
-        
-        return;
-    }
+    let base = proj.localizations_for_locale("en").next().unwrap();
+    let localizations = proj.localizations_for_locale(&args.target);
+    for loc in localizations {
+        for (id, value) in loc.translations {
+            let word = &base.translations.get(&id).unwrap().target;
+            let res = search(&octo, &word, &args.target).await;
+            if let Err(err) = res {
+                eprintln!("Failed to search for translations on GitHub: {err:?}");
+                return;
+            }
 
-    let word = proj.translate("Activity", "de");
-    println!("{:?}", word);
+            let res = res.unwrap();
+            if let Some(code) = res.items.first() {
+                let remote_loc = download(&octo, &code).await.unwrap();
+                println!("{}", word);
+                println!("{:?}", remote_loc.translations.keys());
+                let translation = remote_loc.translations.get(word.as_str());
+                if let Some(translation) = translation {
+                    println!("{word} -> {}", translation.target);
+                    continue;
+                }
+            }
+
+            println!("Did not find any results for {word} on github.")
+        }
+    }
 }
 
