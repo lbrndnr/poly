@@ -1,15 +1,16 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use async_std;
+use strings::Localization;
 use std::fs;
 use std::path::Path;
 use hyper;
 use clap::Parser;
-use octocrab::*;
+use octocrab::{OctocrabBuilder, Octocrab, Page};
 use octocrab::models::*;
 use walkdir::{WalkDir, DirEntry};
 
 mod strings;
-mod source;
+mod proj;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -58,17 +59,18 @@ async fn search(octo: &Octocrab, text: &str, lang: &str) -> Result<Page<Code>, o
     octo.search()
         .code(query.as_str())
         .page(1u32)
-        .per_page(1)
         .send()
         .await
 }
 
-async fn download(octo: &Octocrab, code: &Code) -> Result<String> {
+async fn download(octo: &Octocrab, code: &Code) -> Result<Localization> {
+    let locale = strings::resolve_path_locale(code.url.as_ref()).ok_or(Error::msg("Could not resolve locale using path"))?;
     let res = octo._get(code.url.to_string()).await?;
-
     let body_bytes = hyper::body::to_bytes(res.into_body()).await?;
+
     String::from_utf8(body_bytes.to_vec())
-        .map_err(anyhow::Error::new)
+        .map_err(Error::new)
+        .and_then(|c| Localization::from_params(locale, c.as_str(), false))
 }
 
 // https://nick.groenen.me/notes/recursively-copy-files-in-rust/
@@ -96,6 +98,33 @@ async fn main() {
         .build()
         .unwrap();
 
+    let root = Path::new(&args.proj);
+    if !root.is_dir() {
+        eprintln!("The project root is not a directory.");
+        return;
+    }
+
+    let proj = proj::Project { root: &root };
+    let locales: Vec<_> = proj.available_locales().collect();
+
+    if locales.len() > 0 {
+        let msg = locales.join(", ");
+        println!("Found localizations: {msg}");
+    }
+    else {
+        eprintln!("Failed to find localizable files in {:?}", proj.root);
+        return;
+    }
+
+    if !locales.contains(&args.target) {
+        let base_dir = proj.root.join("en.lproj");
+        let target_dir = proj.root.join(args.target.clone() + ".lproj");
+
+        if let Err(err) = copy_recursively(base_dir, target_dir) {
+            eprintln!("Failed to create new directory for target language: {err}");
+        }
+    }
+
     let res = search(&octo, "Following", &args.target).await;
     if let Err(err) = res {
         eprintln!("Failed to search for translations on GitHub: {err:?}");
@@ -103,41 +132,10 @@ async fn main() {
     }
     let res = res.unwrap();
     for code in res.items {
-        let content = download(&octo, &code).await.unwrap();
-        println!("{content}");
+        let localization = download(&octo, &code).await.unwrap();
+        println!("{} {:?}", code.path, localization.translations.keys());
         
         return;
-    }
-
-
-    let root = Path::new(&args.proj);
-    let proj = source::LocalDirSource { root: &root };
-    let locales: Result<Vec<_>> = proj.available_locales()
-        .map(|ls| ls.collect());
-
-    match &locales {
-        Err(err) => {
-            eprintln!("Failed to find localizable files in {:?}: {err}", proj.root);
-            return
-        }
-        Ok(locales) if locales.is_empty() => {
-            eprintln!("Failed to find localizable files in {:?}", proj.root);
-            return
-        }
-        Ok(locales) => {
-            let msg = locales.join(", ");
-            println!("Found localizations: {msg}");
-        }
-    }
-
-    let locales = locales.unwrap();
-    if !locales.contains(&args.target) {
-        let base_dir = proj.root.join("en.lproj");
-        let target_dir = proj.root.join(args.target + ".lproj");
-
-        if let Err(err) = copy_recursively(base_dir, target_dir) {
-            eprintln!("Failed to create new directory for target language: {err}");
-        }
     }
 
     let word = proj.translate("Activity", "de");
