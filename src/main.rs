@@ -2,9 +2,10 @@ use anyhow::Result;
 use async_std;
 use std::fs;
 use std::path::Path;
+use hyper;
 use clap::Parser;
-use http::header::HeaderName;
-use octocrab::{self, Octocrab, OctocrabBuilder};
+use octocrab::*;
+use octocrab::models::*;
 use walkdir::{WalkDir, DirEntry};
 
 mod strings;
@@ -51,19 +52,23 @@ fn proj_files_iter(path: &str, exclude: Option<Vec<String>>) -> impl Iterator<It
         })
 }
 
-async fn search(octo: &Octocrab, text: &str) -> Result<(), octocrab::Error> {
-    let query = format!("\"{}\" extension:strings", text);
+async fn search(octo: &Octocrab, text: &str, lang: &str) -> Result<Page<Code>, octocrab::Error> {
+    let query = format!("\"{text}\" path:{lang}.lproj extension:strings");
 
-    println!("{}", query);
-    let page = octo
-        .search()
+    octo.search()
         .code(query.as_str())
-        .sort("indexed")
-        .order("asc")
+        .page(1u32)
+        .per_page(1)
         .send()
-        .await?;
+        .await
+}
 
-    Ok(())
+async fn download(octo: &Octocrab, code: &Code) -> Result<String> {
+    let res = octo._get(code.url.to_string()).await?;
+
+    let body_bytes = hyper::body::to_bytes(res.into_body()).await?;
+    String::from_utf8(body_bytes.to_vec())
+        .map_err(anyhow::Error::new)
 }
 
 // https://nick.groenen.me/notes/recursively-copy-files-in-rust/
@@ -85,26 +90,25 @@ fn copy_recursively<P: AsRef<Path>>(source: P, destination: P) -> Result<()> {
 #[async_std::main]
 async fn main() {
     let args = Args::parse();
-
-    // let files = proj_files_iter(args.proj.as_str(), args.exclude);
-    // for file in files {
-    //     strings::parse(file.path());
-    //     println!("{:?}", file.path());
-    // }
-
-    // let localization = strings::parse("/Users/Laurin/Desktop/transmission/macosx/en.lproj/Localizable.strings").unwrap();
-    // for translation in localization.translations {
-        
-    // }
-
     let octo = OctocrabBuilder::default()
         .user_access_token(args.token)
-        .add_header(HeaderName::from_static("x-github-api-version"), String::from("2022-11-28"))
+        .add_header(http::header::ACCEPT, String::from("application/vnd.github.VERSION.raw"))
         .build()
         .unwrap();
 
-    // let res = search(&octo, "Following").await;
-    // println!("{:?}", res);
+    let res = search(&octo, "Following", &args.target).await;
+    if let Err(err) = res {
+        eprintln!("Failed to search for translations on GitHub: {err:?}");
+        return;
+    }
+    let res = res.unwrap();
+    for code in res.items {
+        let content = download(&octo, &code).await.unwrap();
+        println!("{content}");
+        
+        return;
+    }
+
 
     let root = Path::new(&args.proj);
     let proj = source::LocalDirSource { root: &root };
