@@ -1,6 +1,6 @@
 use anyhow::{Error, Result};
 use async_std;
-use strings::Localization;
+use strings::{Localization, Translation};
 use std::fs;
 use std::path::Path;
 use hyper;
@@ -130,6 +130,8 @@ async fn main() {
     for loc in localizations {
         for (id, value) in loc.translations {
             let word = &base.translations.get(&id).unwrap().target;
+            println!("{}", word);
+
             let res = search(&octo, &word, &args.target).await;
             if let Err(err) = res {
                 eprintln!("Failed to search for translations on GitHub: {err:?}");
@@ -137,18 +139,22 @@ async fn main() {
             }
 
             let res = res.unwrap();
-            if let Some(code) = res.items.first() {
-                let remote_loc = download(&octo, &code).await.unwrap();
-                println!("{}", word);
-                println!("{:?}", remote_loc.translations.keys());
-                let translation = remote_loc.translations.get(word.as_str());
-                if let Some(translation) = translation {
-                    println!("{word} -> {}", translation.target);
-                    continue;
-                }
+
+            let mut res = res.items.iter();
+            let mut code = res.next();
+            let mut translation: Option<Translation> = None;
+            
+            while translation.is_none() && code.is_some() {
+                let remote_loc = download(&octo, &code.unwrap()).await.unwrap();
+                translation = remote_loc.translations.get(word.to_lowercase().as_str()).cloned();
             }
 
-            println!("Did not find any results for {word} on github.")
+            if let Some(translation) = translation {
+                println!("{word} -> {}", translation.target);
+            }
+            else {
+                println!("Did not find any results for {word} on github.")
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ pub struct Localization {
     pub translations: HashMap<String, Translation>
 }
 
+#[derive(Clone)]
 pub struct Translation {
     pub comment: String,
     pub source: String,
@@ -54,7 +55,7 @@ impl Localization {
                     (source, target) = (target, source)
                 }
     
-                translations.insert(source.clone(), Translation { comment: comment.clone(), source, target });
+                translations.insert(source.to_lowercase(), Translation { comment: comment.clone(), source, target });
             }
         }
     
