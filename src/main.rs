@@ -1,5 +1,6 @@
 use anyhow::{Error, Result};
 use async_std;
+use deepl::*;
 use strings::{Localization, Translation};
 use std::process;
 use std::fs;
@@ -23,10 +24,6 @@ struct Args {
 
     #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
     exclude: Option<Vec<String>>,
-
-    // Personal user access token
-    #[arg(long)]
-    token: String,
 
     // Target language to translate to
     #[arg(short, long)]
@@ -93,8 +90,10 @@ fn copy_recursively<P: AsRef<Path>>(source: P, destination: P) -> Result<()> {
 #[async_std::main]
 async fn main() {
     let args = Args::parse();
+
+    let token = std::env::var("GITHUB_API_KEY").unwrap();
     let octo = OctocrabBuilder::default()
-        .user_access_token(args.token)
+        .user_access_token(token)
         .add_header(http::header::ACCEPT, String::from("application/vnd.github.VERSION.raw"))
         .build()
         .unwrap();
@@ -127,11 +126,17 @@ async fn main() {
         }
     }
 
+    let token = std::env::var("DEEPL_API_KEY").unwrap();
+    let deepl = DeepLApi::with(&token).new();
+
     let base = proj.localizations_for_locale("en").next().unwrap();
     let localizations = proj.localizations_for_locale(&args.target);
     for loc in localizations {
+        let mut translated_loc = loc.clone();
+
         for (id, value) in loc.translations {
-            let word = &base.translations.get(&id).unwrap().target;
+            let base_translation = base.translations.get(&id).unwrap();
+            let word = &base_translation.target;
             println!("{}", word);
 
             let res = search(&octo, &word, &args.target)
@@ -150,12 +155,23 @@ async fn main() {
                 translation = remote_loc.translations.get(word.to_lowercase().as_str()).cloned();
             }
 
+            if translation.is_none() {
+                let res = deepl
+                .translate_text(word, Lang::try_from(&args.target).unwrap())
+                .source_lang(Lang::EN)
+                .await;
+
+                translation = res.map(|res| {
+                    let mut new_translation = base_translation.clone();
+                    new_translation.target = res.translations[0].text.clone();
+
+                    new_translation
+                }).ok();
+            }
+
             if let Some(translation) = translation {
-                println!("{word} -> {}", translation.target);
-            }
-            else {
-                println!("Did not find any results for {word} on github.")
-            }
+                translated_loc.translations.insert(id, translation);
+            }            
         }
     }
 }

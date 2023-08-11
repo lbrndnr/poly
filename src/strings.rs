@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::Path;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Localization {
     pub locale: String,
     pub translations: HashMap<String, Translation>
@@ -69,6 +70,10 @@ impl Localization {
 
         let locale = resolve_path_locale(path.as_ref()).ok_or(Error::msg("Could not resolve locale using path"))?;
         Localization::from_params(locale, &content, inversed)
+    }
+
+    pub fn write_to_file(path: impl AsRef<Path>) -> Result<(), Error> {
+        Ok(())
     }
 
 }

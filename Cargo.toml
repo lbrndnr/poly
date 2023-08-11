@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1.0.72"
 async-std = {version = "1.12.0", features = ["attributes", "tokio1"]}
 clap = { version = "4.3.19", features = ["derive"] }
+deepl = "0.4.2"
 http = "0.2.9"
 hyper = "0.14.27"
 octocrab = "0.29.1"
