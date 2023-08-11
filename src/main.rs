@@ -1,6 +1,7 @@
 use anyhow::{Error, Result};
 use async_std;
 use strings::{Localization, Translation};
+use std::process;
 use std::fs;
 use std::path::Path;
 use hyper;
@@ -101,7 +102,7 @@ async fn main() {
     let root = Path::new(&args.proj);
     if !root.is_dir() {
         eprintln!("The project root is not a directory.");
-        return;
+        process::exit(1);
     }
 
     let proj = proj::Project { root: &root };
@@ -113,7 +114,7 @@ async fn main() {
     }
     else {
         eprintln!("Failed to find localizable files in {:?}", proj.root);
-        return;
+        process::exit(1);
     }
 
     if !locales.contains(&args.target) {
@@ -121,7 +122,8 @@ async fn main() {
         let target_dir = proj.root.join(args.target.clone() + ".lproj");
 
         if let Err(err) = copy_recursively(base_dir, target_dir) {
-            eprintln!("Failed to create new directory for target language: {err}");
+            println!("Failed to create new directory for target language: {err}");
+            process::exit(1);
         }
     }
 
@@ -132,13 +134,12 @@ async fn main() {
             let word = &base.translations.get(&id).unwrap().target;
             println!("{}", word);
 
-            let res = search(&octo, &word, &args.target).await;
-            if let Err(err) = res {
-                eprintln!("Failed to search for translations on GitHub: {err:?}");
-                return;
-            }
-
-            let res = res.unwrap();
+            let res = search(&octo, &word, &args.target)
+                .await
+                .unwrap_or_else(|err| {
+                    println!("Failed to search for translations on GitHub: {err:?}");
+                    process::exit(1);
+                });
 
             let mut res = res.items.iter();
             let mut code = res.next();
